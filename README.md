@@ -61,10 +61,12 @@ New-Module -Name "MyAwesomeModule" -Description "A module for awesome things" -A
 This will create:
 - A new module directory in your PowerShell modules path
 - A module manifest (.psd1) file
-- A main module file (.psm1) with a basic function template
+- A main module file (.psm1) with basic functions including `Update-$Name`
 - A README.md file
 - A basic test file
 - Standard directories (scripts, docs, tests)
+- **Auto-generated `Install-$Name.ps1` script** for one-liner installation
+- **Auto-generated `Update-$Name` function** for easy updates
 
 ### Remove a module
 ```powershell
@@ -95,6 +97,25 @@ Show-ModuleInstallers
 
 # Add a new module to the installers list
 Add-ModuleInstaller -ModuleName "MyNewModule" -Description "My new module" -GitHubRepo "https://github.com/username/MyNewModule.git"
+```
+
+### Using auto-generated install scripts
+Every module created with `New-Module` comes with its own installer script:
+
+```powershell
+# Download and run the module's installer
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/albertoadent/MyModule/main/scripts/Install-MyModule.ps1" -OutFile "Install-MyModule.ps1"; .\Install-MyModule.ps1
+
+# Or if you have the module locally
+.\MyModule\scripts\Install-MyModule.ps1
+```
+
+### Updating modules
+Every module includes an auto-generated update function:
+
+```powershell
+Import-Module -Name "MyModule"
+Update-MyModule  # Pulls latest version from GitHub
 ```
 
 ## Module Structure

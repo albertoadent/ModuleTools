@@ -64,7 +64,7 @@ function New-Module {
         Author = $Author
         Description = $Description
         PowerShellVersion = "5.1"
-        FunctionsToExport = @()
+        FunctionsToExport = @("Get-$Name", "Update-$Name")
         CmdletsToExport = @()
         VariablesToExport = @()
         AliasesToExport = @()
@@ -132,6 +132,117 @@ Describe '$Name Module Tests' {
 "@
     
     Set-Content -Path (Join-Path $targetModulePath "tests/$Name.Tests.ps1") -Value $testContent
+    
+    # Create Install script for the new module
+    $installScriptContent = @"
+# $Name One-Liner Installer
+# Run this script from anywhere to install $Name from GitHub
+
+param(
+    [switch]`$Force
+)
+
+`$modulePath = Join-Path (`$env:PSModulePath -split ';' | Select-Object -First 1) "$Name"
+`$repoUrl = "https://github.com/albertoadent/$Name.git"
+
+Write-Host "Installing $Name to: `$modulePath" -ForegroundColor Green
+
+if(-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Host "Git is not installed. Installing Git..." -ForegroundColor Yellow
+    winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
+    Start-Sleep -Seconds 10
+    if(-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Write-Error "Git is not installed. Please install Git and try again."
+        exit 1
+    }
+    Write-Host "Git installed successfully." -ForegroundColor Green
+}
+
+if(Test-Path `$modulePath -and -not `$Force) {
+    Write-Host "$Name already exists at: `$modulePath" -ForegroundColor Yellow
+    Write-Host "Use -Force to reinstall." -ForegroundColor Yellow
+    exit 0
+}
+
+if(Test-Path `$modulePath -and `$Force) {
+    Write-Host "Removing existing $Name installation..." -ForegroundColor Yellow
+    Remove-Item `$modulePath -Recurse -Force
+}
+
+Write-Host "Cloning $Name from GitHub..." -ForegroundColor Cyan
+try {
+    git clone `$repoUrl `$modulePath
+    Write-Host "$Name cloned successfully!" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to clone $Name repository. Please check your internet connection and try again."
+    exit 1
+}
+
+Write-Host ""
+Write-Host "$Name installed successfully!" -ForegroundColor Green
+Write-Host "You can now import it with: Import-Module -Name '$Name'" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Available commands:" -ForegroundColor Yellow
+Write-Host "  Get-$Name" -ForegroundColor White
+Write-Host "  Update-$Name" -ForegroundColor White
+"@
+    
+    Set-Content -Path (Join-Path $targetModulePath "scripts/Install-$Name.ps1") -Value $installScriptContent
+    
+    # Add Update function to the main module file
+    $updateFunctionContent = @"
+
+function Update-$Name {
+    [CmdletBinding()]
+    param()
+    
+    `$modulePath = Join-Path (`$env:PSModulePath -split ';' | Select-Object -First 1) "$Name"
+    
+    if(-not (Test-Path `$modulePath)) {
+        Write-Error "$Name not found. Run Install-$Name first."
+        return
+    }
+    
+    # Check if this is a git repository
+    `$gitPath = Join-Path `$modulePath ".git"
+    if(Test-Path `$gitPath) {
+        if(-not (Get-Command git -ErrorAction SilentlyContinue)) {
+            Write-Error "Git is not installed. Please install Git and try again."
+            return
+        }
+        
+        try {
+            Write-Host "Updating $Name from git repository..." -ForegroundColor Cyan
+            git -C `$modulePath pull
+            Write-Host "$Name updated successfully!" -ForegroundColor Green
+        } catch {
+            Write-Error "Failed to update $Name from git repository."
+            return
+        }
+    } else {
+        Write-Host "$Name is not a git repository. Manual update required." -ForegroundColor Yellow
+    }
+}
+"@
+    
+    # Update the module content to include the Update function
+    $moduleContent = @"
+# $Name Module
+# Created by ModuleTools
+
+function Get-$Name {
+    [CmdletBinding()]
+    param()
+    
+    Write-Host "Hello from $Name module!"
+}
+
+$updateFunctionContent
+
+Export-ModuleMember -Function Get-$Name, Update-$Name
+"@
+    
+    Set-Content -Path (Join-Path $targetModulePath "$Name.psm1") -Value $moduleContent
     
     Write-Host "Module '$Name' created successfully at: $targetModulePath" -ForegroundColor Green
     
