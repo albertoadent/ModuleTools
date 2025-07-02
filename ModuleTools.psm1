@@ -64,7 +64,7 @@ function New-Module {
         Author = $Author
         Description = $Description
         PowerShellVersion = "5.1"
-        FunctionsToExport = @("Get-$Name", "Update-$Name")
+        FunctionsToExport = @("Get-$Name", "Update-$Name", "Upload-$Name")
         CmdletsToExport = @()
         VariablesToExport = @()
         AliasesToExport = @()
@@ -185,11 +185,12 @@ Write-Host ""
 Write-Host "Available commands:" -ForegroundColor Yellow
 Write-Host "  Get-$Name" -ForegroundColor White
 Write-Host "  Update-$Name" -ForegroundColor White
+Write-Host "  Upload-$Name -Message 'Your commit message'" -ForegroundColor White
 "@
     
     Set-Content -Path (Join-Path $targetModulePath "scripts/Install-$Name.ps1") -Value $installScriptContent
     
-    # Add Update function to the main module file
+    # Add Update and Upload functions to the main module file
     $updateFunctionContent = @"
 
 function Update-$Name {
@@ -223,9 +224,63 @@ function Update-$Name {
         Write-Host "$Name is not a git repository. Manual update required." -ForegroundColor Yellow
     }
 }
+
+function Upload-$Name {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = `$true)]
+        [string]`$Message,
+        [switch]`$Force
+    )
+    
+    `$modulePath = Join-Path (`$env:PSModulePath -split ';' | Select-Object -First 1) "$Name"
+    
+    if(-not (Test-Path `$modulePath)) {
+        Write-Error "$Name not found."
+        return
+    }
+    
+    # Check if this is a git repository
+    `$gitPath = Join-Path `$modulePath ".git"
+    if(-not (Test-Path `$gitPath)) {
+        Write-Error "$Name is not a git repository."
+        return
+    }
+    
+    if(-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Write-Error "Git is not installed. Please install Git and try again."
+        return
+    }
+    
+    try {
+        Write-Host "Uploading changes to $Name repository..." -ForegroundColor Cyan
+        
+        # Change to module directory
+        Push-Location `$modulePath
+        
+        # Add all changes
+        git add -A
+        
+        # Commit with custom message
+        git commit -m `$Message
+        
+        # Push to remote
+        git push
+        
+        # Return to original location
+        Pop-Location
+        
+        Write-Host "$Name uploaded successfully!" -ForegroundColor Green
+        Write-Host "Commit message: `$Message" -ForegroundColor Yellow
+    } catch {
+        Write-Error "Failed to upload $Name to git repository."
+        Pop-Location -ErrorAction SilentlyContinue
+        return
+    }
+}
 "@
     
-    # Update the module content to include the Update function
+    # Update the module content to include the Update and Upload functions
     $moduleContent = @"
 # $Name Module
 # Created by ModuleTools
@@ -239,7 +294,7 @@ function Get-$Name {
 
 $updateFunctionContent
 
-Export-ModuleMember -Function Get-$Name, Update-$Name
+Export-ModuleMember -Function Get-$Name, Update-$Name, Upload-$Name
 "@
     
     Set-Content -Path (Join-Path $targetModulePath "$Name.psm1") -Value $moduleContent
