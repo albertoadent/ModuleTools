@@ -27,6 +27,29 @@ function New-Module {
         Remove-Item $targetModulePath -Recurse -Force
     }
     
+    # Ensure GitTools is available
+    if(-not (Get-Module -Name "GitTools" -ListAvailable)) {
+        Write-Host "GitTools is required but not installed." -ForegroundColor Yellow
+        $installGitTools = Read-Host "Would you like to install GitTools now? (y/n)"
+        if($installGitTools -eq "y" -or $installGitTools -eq "yes") {
+            Write-Host "Installing GitTools..." -ForegroundColor Cyan
+            try {
+                $gitToolsPath = Join-Path ($env:PSModulePath -split ';' | Select-Object -First 1) "GitTools"
+                git clone "https://github.com/albertoadent/GitTools.git" $gitToolsPath
+                Import-Module -Name "GitTools" -Force
+                Write-Host "GitTools installed and imported successfully!" -ForegroundColor Green
+            } catch {
+                Write-Error "Failed to install GitTools. Please install it manually and try again."
+                return
+            }
+        } else {
+            Write-Error "GitTools is required to create modules with automatic GitHub repository creation."
+            return
+        }
+    } elseif(-not (Get-Module -Name "GitTools")) {
+        Import-Module -Name "GitTools" -Force
+    }
+    
     # Create module directory structure
     New-Item -ItemType Directory -Path $targetModulePath -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $targetModulePath "scripts") -Force | Out-Null
@@ -110,8 +133,32 @@ Describe '$Name Module Tests' {
     
     Set-Content -Path (Join-Path $targetModulePath "tests/$Name.Tests.ps1") -Value $testContent
     
-    Write-Host "Module '$Name' created successfully at: $targetModulePath"
-    Write-Host "You can now import it with: Import-Module -Name '$Name'"
+    Write-Host "Module '$Name' created successfully at: $targetModulePath" -ForegroundColor Green
+    
+    # Create GitHub repository using GitTools
+    Write-Host "Creating GitHub repository for $Name..." -ForegroundColor Cyan
+    try {
+        Create-Repo -Name $Name -Description $Description -Path $targetModulePath -Visibility "public"
+        Write-Host "GitHub repository created successfully!" -ForegroundColor Green
+        
+        # Add to ModuleTools installers list
+        $gitHubRepo = "https://github.com/albertoadent/$Name.git"
+        Add-ModuleInstaller -ModuleName $Name -Description $Description -GitHubRepo $gitHubRepo
+        
+        # Update ModuleTools repository
+        Push-Location $modulesPath
+        git add .
+        git commit -m "Add $Name to module installers list"
+        git push
+        Pop-Location
+        
+        Write-Host "Module '$Name' added to installers list and ModuleTools updated!" -ForegroundColor Green
+    } catch {
+        Write-Warning "Failed to create GitHub repository or update installers list. You may need to do this manually."
+        Write-Host "Repository URL would be: https://github.com/albertoadent/$Name.git" -ForegroundColor Yellow
+    }
+    
+    Write-Host "You can now import it with: Import-Module -Name '$Name'" -ForegroundColor Cyan
 }
 
 function Setup-ModuleTools {

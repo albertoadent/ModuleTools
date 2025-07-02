@@ -21,6 +21,12 @@ A PowerShell module for creating and managing other PowerShell modules. This too
 
 ### One-liner installation from GitHub
 ```powershell
+# Download and run the installer
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/albertoadent/ModuleTools/main/scripts/Install-ModuleTools.ps1" -OutFile "Install-ModuleTools.ps1"; .\Install-ModuleTools.ps1
+```
+
+Or if you have the repository cloned:
+```powershell
 .\scripts\Install-ModuleTools.ps1
 ```
 
@@ -37,6 +43,12 @@ git clone https://github.com/albertoadent/ModuleTools.git $modulePath
 
 # Import the module
 Import-Module -Name "ModuleTools"
+```
+
+### Installing GitTools (Required for New-Module)
+```powershell
+# One-liner installation of GitTools
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/albertoadent/ModuleTools/main/scripts/Install-GitTools.ps1" -OutFile "Install-GitTools.ps1"; .\Install-GitTools.ps1
 ```
 
 ## Usage
